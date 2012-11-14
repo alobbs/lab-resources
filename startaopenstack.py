@@ -7,6 +7,7 @@ import os, prettytable, sys, time, subprocess
 
 from novaclient.v1_1.client import Client
 from novaclient.v1_1.keypairs import KeypairManager
+from novaclient.v1_1.floating_ips import FloatingIPManager
 
 
 class ScriptRunner(object):
@@ -73,9 +74,13 @@ server = client.servers.create(name     = "instance_%s"%(run_id),
 time.sleep(20)
 #server = client.servers.get("c457f772-06f2-434c-b495-e6419355b64f")
 
-for ip in client.floating_ips.list():
-    if ip.instance_id == None:
-        fip = ip.ip
+# Assign Floating IP. Create a new one if necessary
+floating_ips = [ip for ip in client.floating_ips.list() if not ip.instance_id]
+if not floating_ips:
+    floating_mgr = FloatingIPManager (client)
+    fip = floating_mgr.create()
+else:
+    fip = floating_ips[0]
 
 if len(server.networks["novanetwork"]) < 2:
     server.add_floating_ip(fip)
