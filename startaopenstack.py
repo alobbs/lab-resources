@@ -3,7 +3,7 @@
 # AUTHORS:
 #  Derek Higgins <derekh@redhat.com>
 
-import os, prettytable, sys, time, subprocess
+import os, prettytable, sys, time, subprocess, socket, contextlib
 
 from novaclient.v1_1.client import Client
 from novaclient.v1_1.keypairs import KeypairManager
@@ -54,8 +54,13 @@ class ScriptRunner(object):
         self.append("[ -e %s ] && %s || echo"%(fn, s))
 
 
-client = Client(os.environ["OS_USERNAME"], os.environ["OS_PASSWORD"], os.environ["OS_TENANT_NAME"], os.environ["OS_AUTH_URL"], region_name='RegionOne', service_type='compute')
-
+# Nova client
+client = Client(os.environ['OS_USERNAME'],
+                os.environ['OS_PASSWORD'],
+                os.environ['OS_TENANT_NAME'],
+                os.environ['OS_AUTH_URL'],
+                region_name  = 'RegionOne',
+                service_type = 'compute')
 
 # Figure out a keypair name
 keypair = KeypairManager(client)
@@ -85,23 +90,29 @@ else:
 if len(server.networks["novanetwork"]) < 2:
     server.add_floating_ip(fip)
 
-for x in range(30):
-        try:
-                print "Testing Server ", server.id
-                server = client.servers.get(server.id)
-                ipaddress = server.networks["novanetwork"][1]
-                remote_server = ScriptRunner(ipaddress)
-                remote_server.append("echo")
-                remote_server.execute()
-        except:
-                time.sleep(10)
-                continue
+
+# Wait until the SSH service is up
+server = client.servers.get(server.id)
+ipaddress = server.networks["novanetwork"][1]
+print "Waiting for %s (%s) to come up"%(server.id, ipaddress),
+
+for n in range(30):
+    try:
+        s = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
+        with contextlib.closing(s):
+            s.connect ((ipaddress, 22))
+            print ''
+    except Exception:
+        sys.stdout.write('.')
+        sys.stdout.flush()
+        time.sleep(5)
+    else:
         break
 else:
-        print "Server never came up??"
+        print "ERROR: Server never came up??"
+        raise SystemExit
 
-print ipaddress
-
+# Scripts execution
 remote_server = ScriptRunner(ipaddress)
 
 remote_server.append("echo -e '[rhel-bos]\nname=rhel-bos\nbaseurl=http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/x86_64/os/\nenabled=1\ngpgcheck=0\n\n[rhel-bos-opt]\nname=rhel-bos-opt\nbaseurl=http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/optional/x86_64/os/\nenabled=1\ngpgcheck=0' > /etc/yum.repos.d/rhel-bos.repo")
