@@ -2,8 +2,9 @@
 
 # AUTHORS:
 #  Derek Higgins <derekh@redhat.com>
+#  Alvaro Lopez Ortega <alvaro@redhat.com>
 
-import os, prettytable, sys, time, subprocess, socket, contextlib, argparse
+import os, prettytable, sys, time, subprocess, socket, contextlib, argparse, select, fcntl
 
 from novaclient.v1_1.client import Client
 from novaclient.v1_1.keypairs import KeypairManager
@@ -13,38 +14,40 @@ DEFAULT_FLAVOR   = '3'
 DEFAULT_IMAGE_ID = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # RHEL
 DEFAULT_NAME     = 'instance_%s' %(str(int(time.time())))
 
-class ScriptRunner(object):
+class ScriptRunner:
     def __init__(self, ip=None):
+        self.ip     = ip
         self.script = []
-        self.ip = ip
 
     def append(self, s):
         self.script.append(s)
 
     def execute(self):
+        # Build the script
         script = "\n".join(self.script)
-        print "# ============ ssh : %r =========="%self.ip
-        if not False: #config.justprint:
-            _PIPE = subprocess.PIPE  # pylint: disable=E1101
-            if self.ip:
-                obj = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "PasswordAuthentication=no", "root@%s"%self.ip, "bash -x"], stdin=_PIPE, stdout=_PIPE, stderr=_PIPE,
-                                        close_fds=True, shell=False)
-            else:
-                obj = subprocess.Popen(["bash", "-x"], stdin=_PIPE, stdout=_PIPE, stderr=_PIPE,
-                                        close_fds=True, shell=False)
+        script = "function t(){ exit $? ; } \n trap t ERR \n" + script
 
-            print script
-            script = "function t(){ exit $? ; } \n trap t ERR \n" + script
-            stdoutdata, stderrdata = obj.communicate(script)
-            print "============ STDOUT =========="
-            print stdoutdata
-            _returncode = obj.returncode
-            if _returncode:
-                print "============= STDERR =========="
-                print stderrdata
-                raise Exception("Error running remote script")
+        # Create new process
+        _PIPE = subprocess.PIPE  # pylint: disable=E1101
+        if self.ip:
+            obj = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "PasswordAuthentication=no", "root@%s"%self.ip, "bash -x"],
+                                   stdin=_PIPE, stdout=sys.stdout, stderr=sys.stderr,
+                                   close_fds=True, shell=False)
         else:
-            print script
+            obj = subprocess.Popen(["bash", "-x"],
+                                   stdin=_PIPE, stdout=_PIPE, stderr=_PIPE,
+                                   close_fds=True, shell=False)
+
+        # Start the execution
+        print "# ============ ssh : %r =========="%self.ip
+        stdoutdata, stderrdata = obj.communicate(script)
+
+        # Check the return code
+        _returncode = obj.returncode
+        if _returncode:
+            print "============= STDERR ============="
+            print stderrdata
+            raise Exception ("Error running remote script")
 
     def template(self, src, dst, varsdict):
         with open(src) as fp:
@@ -55,6 +58,7 @@ class ScriptRunner(object):
 
     def ifexists(self, fn, s):
         self.append("[ -e %s ] && %s || echo"%(fn, s))
+
 
 # Process command line arguments
 parser = argparse.ArgumentParser()
