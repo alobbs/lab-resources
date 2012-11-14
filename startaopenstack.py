@@ -1,5 +1,8 @@
 #!/usr/bin/python
 
+# AUTHORS:
+#  Derek Higgins <derekh@redhat.com>
+
 import os, prettytable, sys, time, subprocess
 
 from novaclient.v1_1.client import Client
@@ -130,4 +133,3 @@ remote_server.execute()
 
 print "==>", ipaddress
 #server.delete()
-
