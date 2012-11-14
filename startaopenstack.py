@@ -65,7 +65,7 @@ run_id = str(time.time())
 
 imageid = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # rhel
 
-server = client.servers.create(name     = "instance_%s_%d"%(run_id,x),
+server = client.servers.create(name     = "instance_%s"%(run_id),
                                image    = imageid,
                                flavor   = '3',
                                key_name = keypair_name)
