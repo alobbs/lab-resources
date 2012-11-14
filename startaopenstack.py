@@ -64,15 +64,12 @@ keypair_name = keypair.list()[0].id
 run_id = str(time.time())
 
 imageid = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # rhel
-numtostart = 1
-if "-n" in sys.argv:
-    numtostart = int(sys.argv[sys.argv.index("-n")+1])
 
-for x in range(numtostart):
-    server = client.servers.create(name     = "instance_%s_%d"%(run_id,x),
-                                   image    = imageid,
-                                   flavor   = '3',
-                                   key_name = keypair_name)
+server = client.servers.create(name     = "instance_%s_%d"%(run_id,x),
+                               image    = imageid,
+                               flavor   = '3',
+                               key_name = keypair_name)
+
 time.sleep(20)
 #server = client.servers.get("c457f772-06f2-434c-b495-e6419355b64f")
 
