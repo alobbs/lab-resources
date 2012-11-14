@@ -76,8 +76,11 @@ server = client.servers.create(name     = "instance_%s"%(run_id),
                                flavor   = '3',
                                key_name = keypair_name)
 
-time.sleep(20)
-#server = client.servers.get("c457f772-06f2-434c-b495-e6419355b64f")
+# Wait for the server to be created
+for s in range(21):
+    sys.stdout.write ('Please, wait [' + '#'*s + ' '*(20-s) + ']%s' %("\r\n"[s==20]))
+    sys.stdout.flush()
+    time.sleep(1)
 
 # Assign Floating IP. Create a new one if necessary
 floating_ips = [ip for ip in client.floating_ips.list() if not ip.instance_id]
@@ -89,7 +92,6 @@ else:
 
 if len(server.networks["novanetwork"]) < 2:
     server.add_floating_ip(fip)
-
 
 # Wait until the SSH service is up
 server = client.servers.get(server.id)
