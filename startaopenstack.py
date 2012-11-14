@@ -165,6 +165,9 @@ remote_server.append("sed -i -e 's/^CONFIG_SWIFT_INSTALL=.*/CONFIG_SWIFT_INSTALL
 
 # Use RHOS
 remote_server.append("echo -e '[rhos]\nname=rhos\nbaseurl=http://download.lab.bos.redhat.com/rel-eng/OpenStack/Folsom/latest/x86_64/os/\nenabled=1\ngpgcheck=0\n\n' > /etc/yum.repos.d/folsom.repo")
+# or EPEL
+# remote_server.append("sed -i -e '0,/enabled=.*/s//enabled=1/' /etc/yum.repos.d/epel-testing.repo") # use epel-testing
+# remote_server.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=n/g' ans.txt")
 
 remote_server.append("python run_setup.py --answer-file=ans.txt")
 
@@ -174,4 +177,3 @@ remote_server.append("glance image-create --name cirros --disk-format qcow2 --co
 remote_server.execute()
 
 print "==>", ipaddress
-#server.delete()
