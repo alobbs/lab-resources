@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # AUTHORS:
 #  Derek Higgins <derekh@redhat.com>
