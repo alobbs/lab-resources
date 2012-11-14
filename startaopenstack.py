@@ -3,12 +3,15 @@
 # AUTHORS:
 #  Derek Higgins <derekh@redhat.com>
 
-import os, prettytable, sys, time, subprocess, socket, contextlib
+import os, prettytable, sys, time, subprocess, socket, contextlib, argparse
 
 from novaclient.v1_1.client import Client
 from novaclient.v1_1.keypairs import KeypairManager
 from novaclient.v1_1.floating_ips import FloatingIPManager
 
+DEFAULT_FLAVOR   = '3'
+DEFAULT_IMAGE_ID = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # RHEL
+DEFAULT_NAME     = 'instance_%s' %(str(int(time.time())))
 
 class ScriptRunner(object):
     def __init__(self, ip=None):
@@ -53,6 +56,17 @@ class ScriptRunner(object):
     def ifexists(self, fn, s):
         self.append("[ -e %s ] && %s || echo"%(fn, s))
 
+# Process command line arguments
+parser = argparse.ArgumentParser()
+parser.add_argument ('--image_id', action="store", default=DEFAULT_IMAGE_ID, help="Image ID to deploy (Default: %s)"%(DEFAULT_IMAGE_ID))
+parser.add_argument ('--flavor',   action="store", default=DEFAULT_FLAVOR,   help="Image flavor (Default: %s)"%(DEFAULT_FLAVOR))
+parser.add_argument ('--name',     action="store", default=DEFAULT_NAME,     help="Instance name (Automatically chosen: %s)"%(DEFAULT_NAME))
+parser.add_argument ('--vanilla',  action="store_true", default=False,       help="Just deploy the vanilla instance. Do not install OpenStack on it.")
+
+ns = parser.parse_args()
+if not ns:
+    print ("ERROR: Couldn't parse parameters")
+    raise SystemExit
 
 # Nova client
 client = Client(os.environ['OS_USERNAME'],
@@ -67,13 +81,10 @@ keypair = KeypairManager(client)
 assert keypair.list(), 'You have to add at least one keypair (Hint: "nova keypair-add")'
 keypair_name = keypair.list()[0].id
 
-run_id = str(time.time())
-
-imageid = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # rhel
-
-server = client.servers.create(name     = "instance_%s"%(run_id),
-                               image    = imageid,
-                               flavor   = '3',
+# Create the remote instance
+server = client.servers.create(name     = ns.name,
+                               image    = ns.image_id,
+                               flavor   = ns.flavor,
                                key_name = keypair_name)
 
 # Wait for the server to be created
@@ -120,7 +131,7 @@ remote_server = ScriptRunner(ipaddress)
 remote_server.append("echo -e '[rhel-bos]\nname=rhel-bos\nbaseurl=http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/x86_64/os/\nenabled=1\ngpgcheck=0\n\n[rhel-bos-opt]\nname=rhel-bos-opt\nbaseurl=http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/optional/x86_64/os/\nenabled=1\ngpgcheck=0' > /etc/yum.repos.d/rhel-bos.repo")
 remote_server.append("rpm -q epel-release-6-7 || rpm -Uvh http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-7.noarch.rpm")
 
-if "-p" in sys.argv:
+if ns.vanilla:
    remote_server.execute()
    print "==>", ipaddress
    raise SystemExit
