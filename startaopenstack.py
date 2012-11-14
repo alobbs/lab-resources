@@ -6,6 +6,8 @@
 import os, prettytable, sys, time, subprocess
 
 from novaclient.v1_1.client import Client
+from novaclient.v1_1.keypairs import KeypairManager
+
 
 class ScriptRunner(object):
     def __init__(self, ip=None):
@@ -53,14 +55,24 @@ class ScriptRunner(object):
 
 client = Client(os.environ["OS_USERNAME"], os.environ["OS_PASSWORD"], os.environ["OS_TENANT_NAME"], os.environ["OS_AUTH_URL"], region_name='RegionOne', service_type='compute')
 
+
+# Figure out a keypair name
+keypair = KeypairManager(client)
+assert keypair.list(), 'You have to add at least one keypair (Hint: "nova keypair-add")'
+keypair_name = keypair.list()[0].id
+
 run_id = str(time.time())
 
 imageid = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # rhel
 numtostart = 1
 if "-n" in sys.argv:
     numtostart = int(sys.argv[sys.argv.index("-n")+1])
+
 for x in range(numtostart):
-    server = client.servers.create("instance_%s_%d"%(run_id,x), imageid, '3', key_name='derekh')
+    server = client.servers.create(name     = "instance_%s_%d"%(run_id,x),
+                                   image    = imageid,
+                                   flavor   = '3',
+                                   key_name = keypair_name)
 time.sleep(20)
 #server = client.servers.get("c457f772-06f2-434c-b495-e6419355b64f")
 
