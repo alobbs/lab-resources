@@ -12,7 +12,7 @@ from novaclient.v1_1.floating_ips import FloatingIPManager
 
 DEFAULT_FLAVOR   = '3'
 DEFAULT_IMAGE_ID = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # RHEL
-DEFAULT_NAME     = 'instance_%s' %(str(int(time.time())))
+INSTALL_TYPES    = ('rhos', 'epel', 'bare')
 
 class ScriptRunner:
     def __init__(self, ip=None):
@@ -64,13 +64,18 @@ class ScriptRunner:
 parser = argparse.ArgumentParser()
 parser.add_argument ('--image_id', action="store", default=DEFAULT_IMAGE_ID, help="Image ID to deploy (Default: %s)"%(DEFAULT_IMAGE_ID))
 parser.add_argument ('--flavor',   action="store", default=DEFAULT_FLAVOR,   help="Image flavor (Default: %s)"%(DEFAULT_FLAVOR))
-parser.add_argument ('--name',     action="store", default=DEFAULT_NAME,     help="Instance name (Automatically chosen: %s)"%(DEFAULT_NAME))
-parser.add_argument ('--vanilla',  action="store_true", default=False,       help="Just deploy the vanilla instance. Do not install OpenStack on it.")
+parser.add_argument ('--name',     action="store", default=None,             help="Name of the instance (Default: automatically generated)")
+parser.add_argument ('--install',  action="store", default=INSTALL_TYPES[0], help="Post installation: %s. (Default: %s)" %(', '.join(INSTALL_TYPES), INSTALL_TYPES[0]))
 
 ns = parser.parse_args()
 if not ns:
     print ("ERROR: Couldn't parse parameters")
     raise SystemExit
+
+ns.install = ns.install.lower()
+assert ns.install in INSTALL_TYPES, "Invalid --install parameter. Options: %s" %(str(INSTALL_TYPES))
+
+ns.name = ns.name or "%s_%s"%(ns.install, str(int(time.time())))
 
 # Nova client
 client = Client(os.environ['OS_USERNAME'],
@@ -93,7 +98,7 @@ server = client.servers.create(name     = ns.name,
 
 # Wait for the server to be created
 for s in range(21):
-    sys.stdout.write ('Please, wait [' + '#'*s + ' '*(20-s) + ']%s' %("\r\n"[s==20]))
+    sys.stdout.write ('Creating a %s server [' %(ns.install) + '#'*s + ' '*(20-s) + ']%s' %("\r\n"[s==20]))
     sys.stdout.flush()
     time.sleep(1)
 
@@ -135,7 +140,7 @@ remote_server = ScriptRunner(ipaddress)
 remote_server.append("echo -e '[rhel-bos]\nname=rhel-bos\nbaseurl=http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/x86_64/os/\nenabled=1\ngpgcheck=0\n\n[rhel-bos-opt]\nname=rhel-bos-opt\nbaseurl=http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/optional/x86_64/os/\nenabled=1\ngpgcheck=0' > /etc/yum.repos.d/rhel-bos.repo")
 remote_server.append("rpm -q epel-release-6-7 || rpm -Uvh http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-7.noarch.rpm")
 
-if ns.vanilla:
+if ns.install.lower() == 'bare':
    remote_server.execute()
    print "==>", ipaddress
    raise SystemExit
@@ -162,11 +167,13 @@ remote_server.append("sed -i -e 's/^CONFIG_NOVA_COMPUTE_PRIVIF=.*/CONFIG_NOVA_CO
 remote_server.append("sed -i -e 's/^CONFIG_NOVA_NETWORK_PRIVIF=.*/CONFIG_NOVA_NETWORK_PRIVIF=eth0/g' ans.txt")
 remote_server.append("sed -i -e 's/^CONFIG_SWIFT_INSTALL=.*/CONFIG_SWIFT_INSTALL=y/g' ans.txt")
 
-# Use RHOS
-remote_server.append("echo -e '[rhos]\nname=rhos\nbaseurl=http://download.lab.bos.redhat.com/rel-eng/OpenStack/Folsom/latest/x86_64/os/\nenabled=1\ngpgcheck=0\n\n' > /etc/yum.repos.d/folsom.repo")
-# or EPEL
-# remote_server.append("sed -i -e '0,/enabled=.*/s//enabled=1/' /etc/yum.repos.d/epel-testing.repo") # use epel-testing
-# remote_server.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=n/g' ans.txt")
+if ns.install.lower() == 'rhos':
+    # Use RHOS
+    remote_server.append("echo -e '[rhos]\nname=rhos\nbaseurl=http://download.lab.bos.redhat.com/rel-eng/OpenStack/Folsom/latest/x86_64/os/\nenabled=1\ngpgcheck=0\n\n' > /etc/yum.repos.d/folsom.repo")
+elif ns.install.lower() == 'epel':
+    # Use EPEL
+    remote_server.append("sed -i -e '0,/enabled=.*/s//enabled=1/' /etc/yum.repos.d/epel-testing.repo") # use epel-testing
+    remote_server.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=n/g' ans.txt")
 
 remote_server.append("python run_setup.py --answer-file=ans.txt")
 
