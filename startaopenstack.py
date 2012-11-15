@@ -13,6 +13,7 @@ from novaclient.v1_1.floating_ips import FloatingIPManager
 DEFAULT_FLAVOR   = '3'
 DEFAULT_IMAGE_ID = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # RHEL
 INSTALL_TYPES    = ('rhos', 'epel', 'bare')
+CIRROS_URL       = "https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img"
 
 class ScriptRunner:
     def __init__(self, ip=None):
@@ -98,9 +99,11 @@ server = client.servers.create(name     = ns.name,
 
 # Wait for the server to be created
 for s in range(21):
-    sys.stdout.write ('Creating %s (%s) [' %(ns.name, ns.install) + '#'*s + ' '*(20-s) + ']%s' %("\r\n"[s==20]))
+    sys.stdout.write ('%s: Creating VM [' %(ns.name) + '#'*s + ' '*(20-s) + ']%s' %("\r\n"[s==20]))
     sys.stdout.flush()
     time.sleep(1)
+
+print ("%s: ID %s" %(ns.name, server.id))
 
 # Assign Floating IP. Create a new one if necessary
 floating_ips = [ip for ip in client.floating_ips.list() if not ip.instance_id]
@@ -113,10 +116,12 @@ else:
 if len(server.networks["novanetwork"]) < 2:
     server.add_floating_ip(fip)
 
+print ("%s: Floating IP %s" %(ns.name, fip.ip))
+
 # Wait until the SSH service is up
 server = client.servers.get(server.id)
 ipaddress = server.networks["novanetwork"][1]
-print "Waiting for %s (%s) to come up"%(server.id, ipaddress),
+print "%s: Waiting for it to come up"%(ns.name),
 
 for n in range(30):
     try:
@@ -178,7 +183,7 @@ elif ns.install.lower() == 'epel':
 remote_server.append("python run_setup.py --answer-file=ans.txt")
 
 remote_server.append(". ~/keystonerc_admin")
-remote_server.append("glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img")
+remote_server.append("glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s"%(CIRROS_URL))
 
 remote_server.execute()
 
