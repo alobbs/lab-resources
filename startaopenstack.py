@@ -147,7 +147,7 @@ if ns.install.lower() == 'bare':
 
 remote_server.ifnotexists("/root/.ssh/id_rsa", "ssh-keygen -f /root/.ssh/id_rsa -N ''")
 remote_server.append("cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys")
-remote_server.append("yum install -y git cracklib-python screen puppet")
+remote_server.append("yum install -y git screen puppet")
 
 remote_server.ifnotexists("packstack", "git clone git://github.com/fedora-openstack/packstack.git")
 remote_server.ifnotexists("installer", "git clone git://github.com/derekhiggins/installer.git")
