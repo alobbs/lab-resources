@@ -158,7 +158,6 @@ remote_server.ifnotexists("packstack", "git clone git://github.com/fedora-openst
 remote_server.ifnotexists("installer", "git clone git://github.com/derekhiggins/installer.git")
 
 # custom repo ?
-remote_server.append('sed -i -e \'s/.*puppetlabs-swift.git.*/("https:\/\/github.com\/derekhiggins\/puppetlabs-swift.git", "swift", "jtopjian-puppetlabs-rebase"),/g\' packstack/plugins/puppet_950.py')
 remote_server.append("vgcreate cinder-volumes /dev/vdb")
 remote_server.append("cd installer")
 
