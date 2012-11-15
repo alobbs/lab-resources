@@ -144,12 +144,11 @@ remote_server.ifnotexists("/root/.ssh/id_rsa", "ssh-keygen -f /root/.ssh/id_rsa 
 remote_server.append("cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys")
 remote_server.append("yum install -y git cracklib-python screen puppet")
 
-remote_server.ifnotexists("packstack", "git clone -b cinder-support git://github.com/derekhiggins/packstack.git")
+remote_server.ifnotexists("packstack", "git clone git://github.com/fedora-openstack/packstack.git")
 remote_server.ifnotexists("installer", "git clone git://github.com/derekhiggins/installer.git")
 
 # custom repo ?
 remote_server.append('sed -i -e \'s/.*puppetlabs-swift.git.*/("https:\/\/github.com\/derekhiggins\/puppetlabs-swift.git", "swift", "jtopjian-puppetlabs-rebase"),/g\' packstack/plugins/puppet_950.py')
-remote_server.append('sed -i -e \'s/.*puppetlabs-cinder.git.*/("https:\/\/github.com\/derekhiggins\/puppetlabs-cinder.git", "cinder", "targets-conf"),/g\' packstack/plugins/puppet_950.py')
 remote_server.append("vgcreate cinder-volumes /dev/vdb")
 remote_server.append("cd installer")
 
