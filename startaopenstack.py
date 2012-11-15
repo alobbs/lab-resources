@@ -4,7 +4,7 @@
 #  Derek Higgins <derekh@redhat.com>
 #  Alvaro Lopez Ortega <alvaro@redhat.com>
 
-import os, prettytable, sys, time, subprocess, socket, contextlib, argparse, select, fcntl
+import os, sys, time, subprocess, socket, contextlib, argparse, select, fcntl
 
 from novaclient.v1_1.client import Client
 from novaclient.v1_1.keypairs import KeypairManager
