@@ -72,10 +72,10 @@ if not ns:
     print ("ERROR: Couldn't parse parameters")
     raise SystemExit
 
-ns.install = ns.install.lower()
 assert ns.install in INSTALL_TYPES, "Invalid --install parameter. Options: %s" %(str(INSTALL_TYPES))
 
-ns.name = ns.name or "%s_%s"%(ns.install, str(int(time.time())))
+ns.install = ns.install.lower()
+ns.name    = ns.name or "%s_%s"%(ns.install, time.strftime("%Y-%m-%d_%H:%M"))
 
 # Nova client
 client = Client(os.environ['OS_USERNAME'],
@@ -98,7 +98,7 @@ server = client.servers.create(name     = ns.name,
 
 # Wait for the server to be created
 for s in range(21):
-    sys.stdout.write ('Creating a %s server [' %(ns.install) + '#'*s + ' '*(20-s) + ']%s' %("\r\n"[s==20]))
+    sys.stdout.write ('Creating %s (%s) [' %(ns.name, ns.install) + '#'*s + ' '*(20-s) + ']%s' %("\r\n"[s==20]))
     sys.stdout.flush()
     time.sleep(1)
 
