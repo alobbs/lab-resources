@@ -152,21 +152,16 @@ if ns.install.lower() == 'bare':
 
 remote_server.ifnotexists("/root/.ssh/id_rsa", "ssh-keygen -f /root/.ssh/id_rsa -N ''")
 remote_server.append("cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys")
-remote_server.append("yum install -y git screen puppet")
+remote_server.append("yum install -y git screen")
 
-remote_server.ifnotexists("packstack", "git clone git://github.com/fedora-openstack/packstack.git")
-remote_server.ifnotexists("installer", "git clone git://github.com/derekhiggins/installer.git")
+remote_server.ifnotexists("packstack", "git clone --recursive git://github.com/fedora-openstack/packstack.git")
 
-# custom repo ?
 remote_server.append("vgcreate cinder-volumes /dev/vdb")
-remote_server.append("cd installer")
+remote_server.append("cd packstack")
 
-remote_server.append("sed -i -e 's/^DIR_PROJECT_DIR.*/DIR_PROJECT_DIR = \"..\/packstack\"/g' basedefs.py")
-
-remote_server.append("python run_setup.py --gen-answer-file=ans.txt")
+remote_server.append("./packstack --gen-answer-file=ans.txt")
 
 remote_server.append("sed -i -e 's/^CONFIG_KEYSTONE_ADMINPASSWD=.*/CONFIG_KEYSTONE_ADMINPASSWD=123456/g' ans.txt")
-remote_server.append("sed -i -e 's/^CONFIG_LIBVIRT_TYPE=.*/CONFIG_LIBVIRT_TYPE=qemu/g' ans.txt")
 remote_server.append("sed -i -e 's/^CONFIG_NOVA_COMPUTE_PRIVIF=.*/CONFIG_NOVA_COMPUTE_PRIVIF=eth0/g' ans.txt")
 remote_server.append("sed -i -e 's/^CONFIG_NOVA_NETWORK_PRIVIF=.*/CONFIG_NOVA_NETWORK_PRIVIF=eth0/g' ans.txt")
 remote_server.append("sed -i -e 's/^CONFIG_SWIFT_INSTALL=.*/CONFIG_SWIFT_INSTALL=y/g' ans.txt")
@@ -174,12 +169,13 @@ remote_server.append("sed -i -e 's/^CONFIG_SWIFT_INSTALL=.*/CONFIG_SWIFT_INSTALL
 if ns.install.lower() == 'rhos':
     # Use RHOS
     remote_server.append("echo -e '[rhos]\nname=rhos\nbaseurl=http://download.lab.bos.redhat.com/rel-eng/OpenStack/Folsom/latest/x86_64/os/\nenabled=1\ngpgcheck=0\n\n' > /etc/yum.repos.d/folsom.repo")
+    remote_server.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=n/g' ans.txt")
 elif ns.install.lower() == 'epel':
     # Use EPEL
-    remote_server.append("sed -i -e '0,/enabled=.*/s//enabled=1/' /etc/yum.repos.d/epel-testing.repo") # use epel-testing
-    remote_server.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=n/g' ans.txt")
+    #remote_server.append("sed -i -e '0,/enabled=.*/s//enabled=1/' /etc/yum.repos.d/epel-testing.repo") # use epel-testing
+    pass
 
-remote_server.append("python run_setup.py --answer-file=ans.txt")
+remote_server.append("./packstack --answer-file=ans.txt")
 
 remote_server.append(". ~/keystonerc_admin")
 remote_server.append("glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s"%(CIRROS_URL))
