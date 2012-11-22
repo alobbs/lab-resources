@@ -15,6 +15,16 @@ DEFAULT_IMAGE_ID = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # RHEL
 INSTALL_TYPES    = ('rhos', 'epel', 'bare')
 CIRROS_URL       = "https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img"
 
+# Package repositories
+URL_RHEL_BOS  = 'http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/x86_64/os/'
+URL_RHEL_LOAD = os.path.join (URL_RHEL_BOS, 'LoadBalancer/')
+URL_RHEL_HA   = os.path.join (URL_RHEL_BOS, 'HighAvailability/')
+URL_RHEL_RS   = os.path.join (URL_RHEL_BOS, 'ResilientStorage/')
+URL_RHEL_FS   = os.path.join (URL_RHEL_BOS, 'ScalableFileSystem')
+URL_RHEL_OPT  = 'http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/optional/x86_64/os/'
+URL_RHOS      = 'http://download.lab.bos.redhat.com/rel-eng/OpenStack/Folsom/latest/x86_64/os/'
+
+
 class ScriptRunner:
     def __init__(self, ip=None):
         self.ip     = ip
@@ -139,10 +149,22 @@ else:
         print "ERROR: Server never came up??"
         raise SystemExit
 
+
+def repo_entry (name, url):
+    return "[%(name)s]\\nname=%(name)s\\nbaseurl=%(url)s\\nenabled=1\\ngpgcheck=0\\n"%(locals())
+
+
 # Scripts execution
 remote_server = ScriptRunner(ipaddress)
 
-remote_server.append("echo -e '[rhel-bos]\nname=rhel-bos\nbaseurl=http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/x86_64/os/\nenabled=1\ngpgcheck=0\n\n[rhel-bos-opt]\nname=rhel-bos-opt\nbaseurl=http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/optional/x86_64/os/\nenabled=1\ngpgcheck=0' > /etc/yum.repos.d/rhel-bos.repo")
+repos = [repo_entry ('rhel-bos',         URL_RHEL_BOS),
+         repo_entry ('rhel-bos-opt',     URL_RHEL_OPT),
+         repo_entry ('rhel-bos-HA',      URL_RHEL_HA),
+         repo_entry ('rhel-bos-load',    URL_RHEL_LOAD),
+         repo_entry ('rhel-bos-storage', URL_RHEL_RS),
+         repo_entry ('rhel-bos-FS',      URL_RHEL_FS)]
+
+remote_server.append("echo -e '%s' > /etc/yum.repos.d/rhel-bos.repo" %('\n'.join(repos)))
 remote_server.append("rpm -q epel-release-6-7 || rpm -Uvh http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-7.noarch.rpm")
 
 if ns.install.lower() == 'bare':
@@ -174,7 +196,7 @@ remote_server.append("sed -i -e 's/^CONFIG_SWIFT_INSTALL=.*/CONFIG_SWIFT_INSTALL
 
 if ns.install.lower() == 'rhos':
     # Use RHOS
-    remote_server.append("echo -e '[rhos]\nname=rhos\nbaseurl=http://download.lab.bos.redhat.com/rel-eng/OpenStack/Folsom/latest/x86_64/os/\nenabled=1\ngpgcheck=0\n\n' > /etc/yum.repos.d/folsom.repo")
+    remote_server.append("echo -e '%s' > /etc/yum.repos.d/folsom.repo"%(repo_entry ('rhos', URL_RHOS)))
 elif ns.install.lower() == 'epel':
     # Use EPEL
     remote_server.append("sed -i -e '0,/enabled=.*/s//enabled=1/' /etc/yum.repos.d/epel-testing.repo") # use epel-testing
