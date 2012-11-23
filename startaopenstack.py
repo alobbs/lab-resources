@@ -14,6 +14,7 @@ DEFAULT_FLAVOR   = '3'
 DEFAULT_IMAGE_ID = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # RHEL
 INSTALL_TYPES    = ('rhos', 'epel', 'bare')
 CIRROS_URL       = "https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img"
+CFG_PARAMS_PATH  = '~/.startopenstack.params'
 
 # Package repositories
 URL_RHEL_BOS  = 'http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/x86_64/os/'
@@ -74,6 +75,13 @@ class ScriptRunner:
     def ifexists(self, fn, s):
         self.append("[ -e %s ] && %s || echo"%(fn, s))
 
+
+# Load default parameters
+try:
+    with open (os.path.expanduser (CFG_PARAMS_PATH), 'r') as f:
+        sys.argv = sys.argv[:1] + f.read().strip().split(' ') + sys.argv[1:]
+except IOError:
+    pass
 
 # Process command line arguments
 parser = argparse.ArgumentParser()
