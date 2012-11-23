@@ -26,6 +26,10 @@ URL_RHOS      = 'http://download.lab.bos.redhat.com/rel-eng/OpenStack/Folsom/lat
 
 
 class ScriptRunner:
+    SSH_PARAMS = ["-o", "StrictHostKeyChecking=no",
+                  "-o", "UserKnownHostsFile=/dev/null",
+                  "-o", "PasswordAuthentication=no"]
+
     def __init__(self, ip=None):
         self.ip     = ip
         self.script = []
@@ -41,7 +45,7 @@ class ScriptRunner:
         # Create new process
         _PIPE = subprocess.PIPE  # pylint: disable=E1101
         if self.ip:
-            obj = subprocess.Popen(["ssh", "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null", "-o", "PasswordAuthentication=no", "root@%s"%self.ip, "bash -x"],
+            obj = subprocess.Popen(["ssh"] + self.SSH_PARAMS + ["root@%s"%self.ip, "bash -x"],
                                    stdin=_PIPE, stdout=sys.stdout, stderr=sys.stderr,
                                    close_fds=True, shell=False)
         else:
@@ -73,10 +77,11 @@ class ScriptRunner:
 
 # Process command line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument ('--image_id', action="store", default=DEFAULT_IMAGE_ID, help="Image ID to deploy (Default: %s)"%(DEFAULT_IMAGE_ID))
-parser.add_argument ('--flavor',   action="store", default=DEFAULT_FLAVOR,   help="Image flavor (Default: %s)"%(DEFAULT_FLAVOR))
-parser.add_argument ('--name',     action="store", default=None,             help="Name of the instance (Default: automatically generated)")
-parser.add_argument ('--install',  action="store", default=INSTALL_TYPES[0], help="Post installation: %s. (Default: %s)" %(', '.join(INSTALL_TYPES), INSTALL_TYPES[0]))
+parser.add_argument ('--image_id', action="store",      default=DEFAULT_IMAGE_ID, help="Image ID to deploy (Default: %s)"%(DEFAULT_IMAGE_ID))
+parser.add_argument ('--flavor',   action="store",      default=DEFAULT_FLAVOR,   help="Image flavor (Default: %s)"%(DEFAULT_FLAVOR))
+parser.add_argument ('--name',     action="store",      default=None,             help="Name of the instance (Default: automatically generated)")
+parser.add_argument ('--install',  action="store",      default=INSTALL_TYPES[0], help="Post installation: %s. (Default: %s)" %(', '.join(INSTALL_TYPES), INSTALL_TYPES[0]))
+parser.add_argument ('--ssh',      action="store_true", default=False,            help="Log-in the VM after when the installation is finished. (Default: No)")
 
 ns = parser.parse_args()
 if not ns:
@@ -155,6 +160,39 @@ def repo_entry (name, url):
 
 
 # Scripts execution
+def install_basics (run):
+    run.append("echo -e '%s' > /etc/yum.repos.d/rhel-bos.repo" %('\n'.join(repos)))
+    run.append("rpm -q epel-release-6-7 || rpm -Uvh http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-7.noarch.rpm")
+
+def install_openstack_pre (run):
+    run.ifnotexists("/root/.ssh/id_rsa", "ssh-keygen -f /root/.ssh/id_rsa -N ''")
+    run.append("cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys")
+    run.append("yum install -y git screen")
+
+    run.ifnotexists("packstack", "git clone --recursive git://github.com/fedora-openstack/packstack.git")
+
+    run.append("vgcreate cinder-volumes /dev/vdb")
+    run.append("cd packstack")
+
+    run.append("./packstack --gen-answer-file=ans.txt")
+
+    run.append("sed -i -e 's/^CONFIG_KEYSTONE_ADMINPASSWD=.*/CONFIG_KEYSTONE_ADMINPASSWD=123456/g' ans.txt")
+    run.append("sed -i -e 's/^CONFIG_NOVA_COMPUTE_PRIVIF=.*/CONFIG_NOVA_COMPUTE_PRIVIF=eth0/g' ans.txt")
+    run.append("sed -i -e 's/^CONFIG_NOVA_NETWORK_PRIVIF=.*/CONFIG_NOVA_NETWORK_PRIVIF=eth0/g' ans.txt")
+    run.append("sed -i -e 's/^CONFIG_SWIFT_INSTALL=.*/CONFIG_SWIFT_INSTALL=y/g' ans.txt")
+
+def install_openstack_rhos (run):
+    run.append("echo -e '%s' > /etc/yum.repos.d/folsom.repo"%(repo_entry ('rhos', URL_RHOS)))
+    run.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=n/g' ans.txt")
+
+def install_openstack_post (run):
+    run.append("./packstack --answer-file=ans.txt")
+
+    run.append(". ~/keystonerc_admin")
+    run.append("glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s"%(CIRROS_URL))
+
+
+target = ns.install.lower()
 remote_server = ScriptRunner(ipaddress)
 
 repos = [repo_entry ('rhel-bos',         URL_RHEL_BOS),
@@ -164,43 +202,23 @@ repos = [repo_entry ('rhel-bos',         URL_RHEL_BOS),
          repo_entry ('rhel-bos-storage', URL_RHEL_RS),
          repo_entry ('rhel-bos-FS',      URL_RHEL_FS)]
 
-remote_server.append("echo -e '%s' > /etc/yum.repos.d/rhel-bos.repo" %('\n'.join(repos)))
-remote_server.append("rpm -q epel-release-6-7 || rpm -Uvh http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-7.noarch.rpm")
+# Build list of commands to execute
+install_basics (remote_server)
 
-if ns.install.lower() == 'bare':
-   remote_server.execute()
-   print "==>", ipaddress
-   raise SystemExit
-
-remote_server.ifnotexists("/root/.ssh/id_rsa", "ssh-keygen -f /root/.ssh/id_rsa -N ''")
-remote_server.append("cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys")
-remote_server.append("yum install -y git screen")
-
-remote_server.ifnotexists("packstack", "git clone --recursive git://github.com/fedora-openstack/packstack.git")
-
-remote_server.append("vgcreate cinder-volumes /dev/vdb")
-remote_server.append("cd packstack")
-
-remote_server.append("./packstack --gen-answer-file=ans.txt")
-
-remote_server.append("sed -i -e 's/^CONFIG_KEYSTONE_ADMINPASSWD=.*/CONFIG_KEYSTONE_ADMINPASSWD=123456/g' ans.txt")
-remote_server.append("sed -i -e 's/^CONFIG_NOVA_COMPUTE_PRIVIF=.*/CONFIG_NOVA_COMPUTE_PRIVIF=eth0/g' ans.txt")
-remote_server.append("sed -i -e 's/^CONFIG_NOVA_NETWORK_PRIVIF=.*/CONFIG_NOVA_NETWORK_PRIVIF=eth0/g' ans.txt")
-remote_server.append("sed -i -e 's/^CONFIG_SWIFT_INSTALL=.*/CONFIG_SWIFT_INSTALL=y/g' ans.txt")
-
-if ns.install.lower() == 'rhos':
-    # Use RHOS
-    remote_server.append("echo -e '%s' > /etc/yum.repos.d/folsom.repo"%(repo_entry ('rhos', URL_RHOS)))
-    remote_server.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=n/g' ans.txt")
-elif ns.install.lower() == 'epel':
-    # Use epel-testing
+if target == 'bare':
     pass
+elif target == 'rhos':
+    install_openstack_pre  (remote_server)
+    install_openstack_rhos (remote_server)
+    install_openstack_post (remote_server)
+elif target == 'epel':
+    install_openstack_pre  (remote_server)
+    install_openstack_post (remote_server)
 
-remote_server.append("./packstack --answer-file=ans.txt")
-
-remote_server.append(". ~/keystonerc_admin")
-remote_server.append("glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s"%(CIRROS_URL))
-
+# Execute it
 remote_server.execute()
 
 print "==>", ipaddress
+
+if ns.ssh:
+    os.system ("ssh %s root@%s" %(' '.join(ScriptRunner.SSH_PARAMS), fip.ip))
