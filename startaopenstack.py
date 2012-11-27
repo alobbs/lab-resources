@@ -182,7 +182,7 @@ def install_openstack_pre (run):
     run.append("vgcreate cinder-volumes /dev/vdb")
     run.append("cd packstack")
 
-    run.append("./packstack --gen-answer-file=ans.txt")
+    run.append("./bin/packstack --gen-answer-file=ans.txt")
 
     run.append("sed -i -e 's/^CONFIG_KEYSTONE_ADMINPASSWD=.*/CONFIG_KEYSTONE_ADMINPASSWD=123456/g' ans.txt")
     run.append("sed -i -e 's/^CONFIG_NOVA_COMPUTE_PRIVIF=.*/CONFIG_NOVA_COMPUTE_PRIVIF=eth0/g' ans.txt")
@@ -194,7 +194,7 @@ def install_openstack_rhos (run):
     run.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=n/g' ans.txt")
 
 def install_openstack_post (run):
-    run.append("./packstack --answer-file=ans.txt")
+    run.append("./bin/packstack --answer-file=ans.txt")
 
     run.append(". ~/keystonerc_admin")
     run.append("glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s"%(CIRROS_URL))
