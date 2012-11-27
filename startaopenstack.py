@@ -159,7 +159,7 @@ remote_server.ifnotexists("packstack", "git clone --recursive git://github.com/f
 remote_server.append("vgcreate cinder-volumes /dev/vdb")
 remote_server.append("cd packstack")
 
-remote_server.append("./packstack --gen-answer-file=ans.txt")
+remote_server.append("./bin/packstack --gen-answer-file=ans.txt")
 
 remote_server.append("sed -i -e 's/^CONFIG_KEYSTONE_ADMINPASSWD=.*/CONFIG_KEYSTONE_ADMINPASSWD=123456/g' ans.txt")
 remote_server.append("sed -i -e 's/^CONFIG_NOVA_COMPUTE_PRIVIF=.*/CONFIG_NOVA_COMPUTE_PRIVIF=eth0/g' ans.txt")
@@ -175,7 +175,7 @@ elif ns.install.lower() == 'epel':
     #remote_server.append("sed -i -e '0,/enabled=.*/s//enabled=1/' /etc/yum.repos.d/epel-testing.repo") # use epel-testing
     pass
 
-remote_server.append("./packstack --answer-file=ans.txt")
+remote_server.append("./bin/packstack --answer-file=ans.txt")
 
 remote_server.append(". ~/keystonerc_admin")
 remote_server.append("glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s"%(CIRROS_URL))
