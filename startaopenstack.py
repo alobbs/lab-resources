@@ -191,7 +191,9 @@ def install_openstack_pre (run):
 
 def install_openstack_rhos (run):
     run.append("echo -e '%s' > /etc/yum.repos.d/folsom.repo"%(repo_entry ('rhos', URL_RHOS)))
-    run.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=n/g' ans.txt")
+
+def install_openstack_epel (run):
+    run.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=y/g' ans.txt")
 
 def install_openstack_post (run):
     run.append("./bin/packstack --answer-file=ans.txt")
@@ -221,6 +223,7 @@ elif target == 'rhos':
     install_openstack_post (remote_server)
 elif target == 'epel':
     install_openstack_pre  (remote_server)
+    install_openstack_epel (remote_server)
     install_openstack_post (remote_server)
 
 # Execute it
