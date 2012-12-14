@@ -38,13 +38,8 @@ if not os.path.exists ('/usr/bin/packstack'):
 print "* Packstack installed"
 
 # Check SSH keys
-try:
-    ssh_files = os.listdir (os.path.join (os.getenv('HOME'), '.ssh'))
-except OSError:
-    ssh_files = []
-
-if not 'id_rsa' in ssh_files:
-    run ("ssh-keygen -t rsa -N '' -f $HOME/.ssh/id_rsa")
+if not os.path.exists (os.path.expanduser("~/.ssh/id_rsa.pub")):
+    run ("ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa")
 
 print "* $HOME/.ssh/id_rsa: OK"
 
