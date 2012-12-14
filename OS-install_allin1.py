@@ -19,72 +19,99 @@ ANS_REPLACEMENTS = [
 PACKSTACK_HTTP_INDEX = "http://10.16.16.34/rpms/RPMS/noarch"
 CIRROS_URL           = "https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img"
 
-# Check dependencies
-if not os.path.exists('/usr/bin/wget'):
-    run ("yum install -y wget")
 
-# Install Packstack
-if not os.path.exists ('/usr/bin/packstack'):
+def dependencies_install():
+    # Wget
+    if not os.path.exists('/usr/bin/wget'):
+        run ("yum install -y wget")
 
-    # Figure RPM to download
-    index = os.popen ('wget -O - %(PACKSTACK_HTTP_INDEX)s'%(globals()), 'r').read()
-    files = [f for f in re.findall (r'href="(.+?)"', index) if '.rpm' in f]
-    http_rpm = '%s/%s' %(PACKSTACK_HTTP_INDEX, files[-1])
+    print "* Dependencies: OK"
 
-    # Download
-    run ("wget %s" %(http_rpm))
-    run ("rpm -i %s" %(os.path.basename(http_rpm)))
+def ssh_configure():
+    # Check SSH keys
+    if not os.path.exists (os.path.expanduser("~/.ssh/id_rsa.pub")):
+        run ("ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa")
 
-print "* Packstack installed"
+    print "* $HOME/.ssh/id_rsa: OK"
 
-# Check SSH keys
-if not os.path.exists (os.path.expanduser("~/.ssh/id_rsa.pub")):
-    run ("ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa")
+    # Check authorized keys
+    try:
+        auth = open(os.path.expanduser("~/.ssh/authorized_keys"),'r').read()
+    except IOError:
+        auth = ''
 
-print "* $HOME/.ssh/id_rsa: OK"
+    pub = open(os.path.expanduser("~/.ssh/id_rsa.pub"),'r').read().strip()
 
-# Check authorized keys
-try:
-    auth = open(os.path.expanduser("~/.ssh/authorized_keys"),'r').read()
-except IOError:
-    auth = ''
+    if not pub in auth:
+        open(os.path.expanduser("~/.ssh/authorized_keys",'a')).write(pub+'\n')
 
-pub = open(os.path.expanduser("~/.ssh/id_rsa.pub"),'r').read().strip()
+    print "* $HOME/.ssh/authorized_keys: OK"
 
-if not pub in auth:
-    open(os.path.expanduser("~/.ssh/authorized_keys",'a')).write(pub+'\n')
+def cinder_volume_setup():
+    # Volume Group for Cinder
+    if not os.path.exists (VG_CINDER_DEV):
+        assert False, "VG_CINDER_DEV=%(VG_CINDER_DEV)s doesn't exist"%(globals())
 
-print "* $HOME/.ssh/authorized_keys: OK"
+    if not 'cinder-volumes' in os.popen('vgdisplay | grep "VG Name"').read():
+        run ('vgcreate cinder-volumes %(VG_CINDER_DEV)s' %(globals()))
 
-# Generate the answers file
-run ("packstack --gen-answer-file=/tmp/ans.txt.orig")
+    print "* Cinder volume: OK"
 
-# Configure it
-ans = open('/tmp/ans.txt.orig','r').read()
+def packstack_install():
+    if not os.path.exists ('/usr/bin/packstack'):
+        # Figure RPM to download
+        index = os.popen ('wget -O - %(PACKSTACK_HTTP_INDEX)s'%(globals()), 'r').read()
+        files = [f for f in re.findall (r'href="(.+?)"', index) if '.rpm' in f]
+        http_rpm = '%s/%s' %(PACKSTACK_HTTP_INDEX, files[-1])
 
-for r in ANS_REPLACEMENTS:
-    ans = ans.replace (r[0], r[1])
+        # Download
+        run ("wget %s" %(http_rpm))
+        run ("rpm -i %s" %(os.path.basename(http_rpm)))
 
-open('/tmp/ans.txt', 'w+').write(ans)
+    print "* Packstack installed"
 
-# Volume Group for Cinder
-if not os.path.exists (VG_CINDER_DEV):
-    assert False, "VG_CINDER_DEV=%(VG_CINDER_DEV)s doesn't exist"%(globals())
+def packstack_configure():
+    # Generate the answers file
+    run ("packstack --gen-answer-file=/tmp/ans.txt.orig")
 
-if not 'cinder-volumes' in os.popen('vgdisplay | grep "VG Name"').read():
-    run ('vgcreate cinder-volumes %(VG_CINDER_DEV)s' %(globals()))
+    # Configure it
+    ans = open('/tmp/ans.txt.orig','r').read()
 
-print "* Cinder volume ready"
+    for r in ANS_REPLACEMENTS:
+        ans = ans.replace (r[0], r[1])
 
-# Install
-run ('packstack --answer-file=/tmp/ans.txt')
+    # Write answers file
+    open('/tmp/ans.txt', 'w+').write(ans)
+    print "* Packstack's answer file: OK"
 
-# Download image for Glance
-local_cirros = os.path.join ("/var/tmp", os.path.basename(CIRROS_URL))
-run ("wget -c %s -O /%s"%(CIRROS_URL, local_cirros))
+def packstack_run():
+    run ('packstack --answer-file=/tmp/ans.txt')
 
-# Add a image to Glance
-if not 'cirros' in os.popen("glance image-list").read():
-    run ('source ~/keystonerc_admin ;' + \
-         'env | grep OS_ ;' + \
-         'glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s' %(local_cirros))
+def glance_setup():
+    # Download image for Glance
+    local_cirros = os.path.join ("/var/tmp", os.path.basename(CIRROS_URL))
+    run ("wget -c %s -O /%s"%(CIRROS_URL, local_cirros))
+
+    # Add a image to Glance
+    if not 'cirros' in os.popen("glance image-list").read():
+        run ('source ~/keystonerc_admin ;' + \
+             'env | grep OS_ ;' + \
+             'glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s' %(local_cirros))
+
+def main():
+    # Pre
+    dependencies_install()
+    ssh_configure()
+    cinder_volume_setup()
+
+    # Install
+    packstack_install()
+    packstack_configure()
+    packstack_run()
+
+    # Post
+    glance_setup()
+
+
+if __name__ == '__main__':
+    main()
