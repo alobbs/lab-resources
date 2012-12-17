@@ -45,7 +45,7 @@ def ssh_configure():
     pub = open(os.path.expanduser("~/.ssh/id_rsa.pub"),'r').read().strip()
 
     if not pub in auth:
-        open(os.path.expanduser("~/.ssh/authorized_keys",'a')).write(pub+'\n')
+        open(os.path.expanduser("~/.ssh/authorized_keys"),'a').write(pub+'\n')
 
     print "* $HOME/.ssh/authorized_keys: OK"
 
