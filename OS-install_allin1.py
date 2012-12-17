@@ -6,7 +6,6 @@ Installs Openstack (all in one) using the latest Packstack package.
 """
 
 import os, re
-from os import system as run
 
 VG_CINDER_DEV = '/dev/vdb'
 
@@ -19,6 +18,9 @@ ANS_REPLACEMENTS = [
 PACKSTACK_HTTP_INDEX = "http://10.16.16.34/rpms/RPMS/noarch"
 CIRROS_URL           = "https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img"
 
+def run (cmd):
+    print '+', cmd
+    return os.system(cmd)
 
 def dependencies_install():
     # Wget
@@ -62,11 +64,13 @@ def packstack_install():
         # Figure RPM to download
         index = os.popen ('wget -O - %(PACKSTACK_HTTP_INDEX)s'%(globals()), 'r').read()
         files = [f for f in re.findall (r'href="(.+?)"', index) if '.rpm' in f]
-        http_rpm = '%s/%s' %(PACKSTACK_HTTP_INDEX, files[-1])
+
+        rpm_http  = '%s/%s' %(PACKSTACK_HTTP_INDEX, files[-1])
+        rpm_local = os.path.join ('/tmp', os.path.basename(rpm_http))
 
         # Download
-        run ("wget %s" %(http_rpm))
-        run ("rpm -i %s" %(os.path.basename(http_rpm)))
+        run ("wget -O %s %s" %(rpm_local, rpm_http))
+        run ("rpm -i %s" %(rpm_local))
 
     print "* Packstack installed"
 
@@ -85,7 +89,17 @@ def packstack_configure():
     print "* Packstack's answer file: OK"
 
 def packstack_run():
+    fp = os.path.expanduser("~/keystonerc_admin")
+    if os.path.exists (fp):
+        os.unlink (fp)
+
     run ('packstack --answer-file=/tmp/ans.txt')
+
+
+def openstack_set_env():
+    for line in open (os.path.expanduser("~/keystonerc_admin"), 'r').readlines():
+        tmp = line.strip().replace('export ', '').split('=')
+        os.putenv (tmp[0], tmp[1])
 
 def glance_setup():
     # Download image for Glance
@@ -94,9 +108,9 @@ def glance_setup():
 
     # Add a image to Glance
     if not 'cirros' in os.popen("glance image-list").read():
-        run ('source ~/keystonerc_admin ;' + \
-             'env | grep OS_ ;' + \
-             'glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s' %(local_cirros))
+        cmd = 'glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s' %(local_cirros)
+        print cmd
+        run (cmd)
 
 def main():
     # Pre
@@ -108,8 +122,10 @@ def main():
     packstack_install()
     packstack_configure()
     packstack_run()
+    openstack_set_env()
 
     # Post
+
     glance_setup()
 
 
