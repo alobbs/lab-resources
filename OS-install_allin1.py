@@ -108,9 +108,7 @@ def glance_setup():
 
     # Add a image to Glance
     if not 'cirros' in os.popen("glance image-list").read():
-        cmd = 'glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s' %(local_cirros)
-        print cmd
-        run (cmd)
+        run ('glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 < %s' %(local_cirros))
 
 def main():
     # Pre
