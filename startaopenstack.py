@@ -11,20 +11,19 @@ from novaclient.v1_1.keypairs import KeypairManager
 from novaclient.v1_1.floating_ips import FloatingIPManager
 
 DEFAULT_FLAVOR   = '3'
-DEFAULT_IMAGE_ID = 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # RHEL
+DEFAULT_IMAGE_ID = '0436dfb1-b7b9-489f-ac67-f291aa5ef9d1' # RHEL6.4b 'dad24449-4f9b-46a5-ac3b-a01da67de2dc' # RHEL
 INSTALL_TYPES    = ('rhos', 'epel', 'bare')
 CIRROS_URL       = "https://launchpad.net/cirros/trunk/0.3.0/+download/cirros-0.3.0-x86_64-disk.img"
 CFG_PARAMS_PATH  = '~/.startopenstack.params'
 
 # Package repositories
-URL_RHEL_BOS  = 'http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/x86_64/os/'
+URL_RHEL_BOS  = 'http://download.lab.bos.redhat.com/released/RHEL-6/6.4/Server/x86_64/os/'
 URL_RHEL_LOAD = os.path.join (URL_RHEL_BOS, 'LoadBalancer/')
 URL_RHEL_HA   = os.path.join (URL_RHEL_BOS, 'HighAvailability/')
 URL_RHEL_RS   = os.path.join (URL_RHEL_BOS, 'ResilientStorage/')
 URL_RHEL_FS   = os.path.join (URL_RHEL_BOS, 'ScalableFileSystem')
-URL_RHEL_OPT  = 'http://download.lab.bos.redhat.com/released/RHEL-6/6.3/Server/optional/x86_64/os/'
+URL_RHEL_OPT  = 'http://download.lab.bos.redhat.com/released/RHEL-6/6.4/Server/optional/x86_64/os/'
 URL_RHOS      = 'http://download.lab.bos.redhat.com/rel-eng/OpenStack/Folsom/latest/x86_64/os/'
-
 
 class ScriptRunner:
     SSH_PARAMS = ["-o", "StrictHostKeyChecking=no",
@@ -98,6 +97,7 @@ if not ns:
 
 assert ns.install in INSTALL_TYPES, "Invalid --install parameter. Options: %s" %(str(INSTALL_TYPES))
 
+# Exceptional parameters
 ns.install = ns.install.lower()
 ns.name    = ns.name or "%s_%s"%(ns.install, time.strftime("%Y-%m-%d_%H:%M"))
 
@@ -146,7 +146,7 @@ server = client.servers.get(server.id)
 ipaddress = server.networks["novanetwork"][1]
 print "%s: Waiting for it to come up"%(ns.name),
 
-for n in range(30):
+for n in range(60):
     try:
         s = socket.socket (socket.AF_INET, socket.SOCK_STREAM)
         with contextlib.closing(s):
@@ -168,38 +168,42 @@ def repo_entry (name, url):
 
 
 # Scripts execution
-def install_basics (run):
+def install_basic_repos (run):
     run.append("echo -e '%s' > /etc/yum.repos.d/rhel-bos.repo" %('\n'.join(repos)))
-    run.append("rpm -q epel-release-6-7 || rpm -Uvh http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-7.noarch.rpm")
+#   run.append("rpm -q epel-release-6-7 || rpm -Uvh http://download.fedoraproject.org/pub/epel/6/i386/epel-release-6-7.noarch.rpm")
 
-def install_openstack_pre (run):
+def install_rhos_repos (run):
+    run.append("echo -e '%s' > /etc/yum.repos.d/folsom.repo"%(repo_entry ('rhos', URL_RHOS)))
+
+def install_dependencies (run):
     run.ifnotexists("/root/.ssh/id_rsa", "ssh-keygen -f /root/.ssh/id_rsa -N ''")
     run.append("cat ~/.ssh/id_rsa.pub >> ~/.ssh/authorized_keys")
-    run.append("yum install -y git screen")
+    run.append("yum install -y openstack-packstack git screen")
 
-    run.ifnotexists("packstack", "git clone --recursive git://github.com/fedora-openstack/packstack.git")
+#   run.ifnotexists("packstack", "git clone --recursive git://github.com/fedora-openstack/packstack.git")
 
     run.append("vgcreate cinder-volumes /dev/vdb")
-    run.append("cd packstack")
+#   run.append("cd packstack")
 
-    run.append("./bin/packstack --gen-answer-file=ans.txt")
+def install_packstack_pre (run):
+#   run.append("./bin/packstack --gen-answer-file=ans.txt")
+    run.append("packstack --gen-answer-file=ans.txt")
 
     run.append("sed -i -e 's/^CONFIG_KEYSTONE_ADMINPASSWD=.*/CONFIG_KEYSTONE_ADMINPASSWD=123456/g' ans.txt")
     run.append("sed -i -e 's/^CONFIG_NOVA_COMPUTE_PRIVIF=.*/CONFIG_NOVA_COMPUTE_PRIVIF=eth0/g' ans.txt")
     run.append("sed -i -e 's/^CONFIG_NOVA_NETWORK_PRIVIF=.*/CONFIG_NOVA_NETWORK_PRIVIF=eth0/g' ans.txt")
     run.append("sed -i -e 's/^CONFIG_SWIFT_INSTALL=.*/CONFIG_SWIFT_INSTALL=y/g' ans.txt")
 
-def install_openstack_rhos (run):
-    run.append("echo -e '%s' > /etc/yum.repos.d/folsom.repo"%(repo_entry ('rhos', URL_RHOS)))
-
-def install_openstack_epel (run):
+def install_epel_tweaks (run):
     run.append("sed -i -e 's/^CONFIG_USE_EPEL=.*/CONFIG_USE_EPEL=y/g' ans.txt")
 
-def install_openstack_post (run):
-    run.append("./bin/packstack --answer-file=ans.txt")
+def install_packstack (run):
+    run.append("packstack --answer-file=ans.txt")
 
+def install_images (run):
     run.append(". ~/keystonerc_admin")
     run.append("glance image-create --name cirros --disk-format qcow2 --container-format bare --is-public 1 --copy-from %s"%(CIRROS_URL))
+
 
 
 target = ns.install.lower()
@@ -213,18 +217,24 @@ repos = [repo_entry ('rhel-bos',         URL_RHEL_BOS),
          repo_entry ('rhel-bos-FS',      URL_RHEL_FS)]
 
 # Build list of commands to execute
-install_basics (remote_server)
-
 if target == 'bare':
     pass
 elif target == 'rhos':
-    install_openstack_pre  (remote_server)
-    install_openstack_rhos (remote_server)
-    install_openstack_post (remote_server)
+    install_basic_repos   (remote_server)
+    install_rhos_repos    (remote_server)
+    install_dependencies  (remote_server)
+    install_packstack_pre (remote_server)
+    install_packstack     (remote_server)
+    install_images        (remote_server)
 elif target == 'epel':
-    install_openstack_pre  (remote_server)
-    install_openstack_epel (remote_server)
-    install_openstack_post (remote_server)
+    install_basic_repos   (remote_server)
+    install_rhos_repos    (remote_server)
+    install_dependencies  (remote_server)
+    install_packstack_pre (remote_server)
+    install_epel_tweaks   (remote_server)
+    install_packstack     (remote_server)
+    install_images        (remote_server)
+
 
 # Execute it
 remote_server.execute()

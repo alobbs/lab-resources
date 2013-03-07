@@ -104,7 +104,7 @@ def openstack_set_env():
 def glance_setup():
     # Download image for Glance
     local_cirros = os.path.join ("/var/tmp", os.path.basename(CIRROS_URL))
-    run ("wget -c %s -O /%s"%(CIRROS_URL, local_cirros))
+    run ("wget -c '%s' -O %s"%(CIRROS_URL, local_cirros))
 
     # Add a image to Glance
     if not 'cirros' in os.popen("glance image-list").read():
@@ -123,7 +123,6 @@ def main():
     openstack_set_env()
 
     # Post
-
     glance_setup()
 
 
